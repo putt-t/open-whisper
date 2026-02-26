@@ -13,7 +13,8 @@ class _CleanerState:
     checked: bool = False
     available: bool = False
     unavailable_reason: str | None = None
-    session: Any | None = None
+    fm: Any | None = None
+    model: Any | None = None
 
 
 class AppleTranscriptCleaner:
@@ -23,30 +24,50 @@ class AppleTranscriptCleaner:
         self.instructions = instructions
         self._state = _CleanerState()
         self._availability_lock = asyncio.Lock()
-        self._respond_lock = asyncio.Lock()
 
     async def clean(self, transcript: str) -> str:
         text = transcript.strip()
         if not text:
             return text
 
-        if not await self._ensure_session():
+        if not await self._ensure_model():
             return text
 
+        session = self._state.fm.LanguageModelSession(
+            instructions=self.instructions,
+            model=self._state.model,
+        )
+
         prompt = (
-            "Clean the following raw transcription.\n"
-            "Keep only the final intended message.\n"
-            "Output only the cleaned text.\n\n"
+            "You are a transcript cleanup engine.\n"
+            "Apply these rules in order:\n"
+            "1) Remove filler words, stutters, and false starts.\n"
+            "2) If the speaker revises/retracts earlier content, keep only the final surviving intent.\n"
+            "3) If two statements conflict, the latest statement wins.\n"
+            "4) Never include discarded alternatives together with the final choice.\n"
+            "5) Keep decisive correction cues (e.g. 'actually', 'wait', 'no', 'instead') as signals and resolve to the final choice.\n"
+            "6) If no cleanup is needed, return the input unchanged.\n"
+            "7) Keep original language and tone, and do not add information.\n"
+            "8) Return only the final cleaned text.\n"
+            "Example:\n"
+            "Raw: We shipped it. Actually, no, not shipped yet.\n"
+            "Cleaned: It's not shipped yet.\n"
+            "Example:\n"
+            "Raw: Use Rust. Wait, use Python.\n"
+            "Cleaned: Use Python.\n"
             f"Raw transcript:\n{text}"
         )
 
-        async with self._respond_lock:
-            result = await self._state.session.respond(prompt)
+        try:
+            result = await session.respond(prompt)
+        except Exception as exc:
+            logger.warning("Apple cleanup respond failed: %s", exc)
+            return text
 
         cleaned = str(result).strip()
         return cleaned or text
 
-    async def _ensure_session(self) -> bool:
+    async def _ensure_model(self) -> bool:
         if self._state.checked:
             return self._state.available
 
@@ -59,9 +80,15 @@ class AppleTranscriptCleaner:
             except ImportError:
                 self._mark_unavailable("apple_fm_sdk is not installed")
                 return False
+            self._state.fm = fm
 
             try:
-                model = fm.SystemLanguageModel()
+                if hasattr(fm, "SystemLanguageModelGuardrails"):
+                    model = fm.SystemLanguageModel(
+                        guardrails=fm.SystemLanguageModelGuardrails.PERMISSIVE_CONTENT_TRANSFORMATIONS
+                    )
+                else:
+                    model = fm.SystemLanguageModel()
                 available, reason = model.is_available()
             except Exception as exc:
                 self._mark_unavailable(f"availability check failed: {exc}")
@@ -71,18 +98,10 @@ class AppleTranscriptCleaner:
                 self._mark_unavailable(reason or "system model unavailable")
                 return False
 
-            try:
-                self._state.session = fm.LanguageModelSession(
-                    instructions=self.instructions,
-                    model=model,
-                )
-            except Exception as exc:
-                self._mark_unavailable(f"session creation failed: {exc}")
-                return False
-
             self._state.checked = True
             self._state.available = True
-            logger.info("Apple transcript cleanup enabled")
+            self._state.model = model
+            logger.info("Apple transcript cleanup enabled (stateless session per request)")
             return True
 
     def _mark_unavailable(self, reason: str) -> None:
