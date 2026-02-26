@@ -148,7 +148,24 @@ Main vars:
 - `DICTATION_TMP_DIR` (default: OS temp dir + `/dictation-asr`)
 - `DICTATION_LOG_TRANSCRIPTS` (default: `true`)
 - `DICTATION_ASR_TOKEN_FILE` (default: `~/.dictation/asr-token`)
+- `DICTATION_CLEANUP_ENABLED` (default: `false`) enables post-processing with Apple Foundation Models
+- `DICTATION_CLEANUP_INSTRUCTIONS` (default: built-in cleanup prompt) controls cleanup behavior
 - `DICTATION_ASR_HOST` (default: `127.0.0.1`)
 - `DICTATION_ASR_PORT` (default: `8765`)
 - `DICTATION_BUNDLE_ID` (default: `com.example.dictation`)
 - `DICTATION_CODESIGN_IDENTITY` (default: `-` for ad-hoc; set to a certificate name like `DictationDev` to persist permissions across rebuilds)
+
+### Optional: Apple Foundation Model cleanup pass
+
+To run Qwen transcription through Apple Foundation Models for cleanup:
+
+1. Install Apple SDK locally:
+```bash
+uv pip install -e ./.external
+```
+2. In `.env`:
+```bash
+DICTATION_CLEANUP_ENABLED=true
+```
+
+When enabled, raw transcript text is rewritten to remove filler words, pauses, stutters, and false starts while preserving intended meaning.

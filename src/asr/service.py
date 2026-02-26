@@ -14,6 +14,7 @@ from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
 from mlx_audio.stt.generate import generate_transcription
 from mlx_audio.stt.utils import load_model
+from src.postprocess.apple_transcript_cleaner import AppleTranscriptCleaner
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +26,13 @@ class ASRService:
         temp_dir: Path,
         auth_token_file: Path,
         log_transcripts: bool = True,
+        transcript_cleaner: AppleTranscriptCleaner | None = None,
     ) -> None:
         self.model_id = model_id
         self.temp_dir = temp_dir
         self.auth_token_file = auth_token_file
         self.log_transcripts = log_transcripts
+        self.transcript_cleaner = transcript_cleaner
         self._model = None
         self._auth_token: str | None = None
         self._transcription_lock = asyncio.Lock()
@@ -65,12 +68,26 @@ class ASRService:
         try:
             async with self._transcription_lock:
                 result = await run_in_threadpool(self._transcribe_sync, tmp_audio_path, out_base)
-            text = (getattr(result, "text", "") or "").strip()
+            raw_text = (getattr(result, "text", "") or "").strip()
+            text = await self._postprocess_transcript(raw_text)
             if self.log_transcripts:
-                logger.info("transcript: %s", text)
+                if text != raw_text:
+                    logger.info("transcript raw: %s", raw_text)
+                    logger.info("transcript cleaned: %s", text)
+                else:
+                    logger.info("transcript: %s", text)
             return text
         finally:
             self._cleanup_temp_files(tmp_audio_path, out_base)
+
+    async def _postprocess_transcript(self, text: str) -> str:
+        if not self.transcript_cleaner or not text:
+            return text
+        try:
+            return await self.transcript_cleaner.clean(text)
+        except Exception:
+            logger.exception("Transcript cleanup failed, returning raw transcript")
+            return text
 
     def _transcribe_sync(self, tmp_audio_path: Path, out_base: Path):
         return generate_transcription(

@@ -29,6 +29,22 @@ class Settings(BaseSettings):
         default=DEFAULT_ASR_TOKEN_FILE,
         alias="DICTATION_ASR_TOKEN_FILE",
     )
+    dictation_cleanup_enabled: bool = Field(
+        default=False,
+        alias="DICTATION_CLEANUP_ENABLED",
+    )
+    dictation_cleanup_instructions: str = Field(
+        default=(
+            "You clean raw speech-to-text transcripts into final user-ready text. "
+            "Preserve meaning, intent, entities, and factual content. "
+            "Remove filler words, false starts, repeated fragments, and disfluencies. "
+            "Resolve obvious self-corrections to the final stated intent. "
+            "Keep the original language and tone. "
+            "Do not add new information. "
+            "Return only the cleaned final text."
+        ),
+        alias="DICTATION_CLEANUP_INSTRUCTIONS",
+    )
 
     @property
     def resolved_model_id(self) -> str:

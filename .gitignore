@@ -10,3 +10,4 @@ models
 uv.lock
 __pycache__
 *.pyc
+.external/
