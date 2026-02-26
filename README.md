@@ -59,8 +59,10 @@ open "$HOME/Applications/Dictation.app"
 - Microphone
 - Accessibility
 - Input Monitoring
+4. (Optional) Choose a specific microphone from the menu bar icon:
+- `Microphone -> <device name>`
 
-4. Quit app and reopen using same method as above.
+5. Quit app and reopen using same method as above.
 
 ## Already Downloaded (normal daily use)
 
@@ -72,6 +74,8 @@ open "$HOME/Applications/Dictation.app"
 ```bash
 open "$HOME/Applications/Dictation.app"
 ```
+3. (Optional) Select input device from:
+- `Microphone -> <device name>`
 
 ## After Pulling Code Updates
 
