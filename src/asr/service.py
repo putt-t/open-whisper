@@ -7,6 +7,7 @@ import os
 import secrets
 import shutil
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -20,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 class ASRService:
+    _LOG_TEXT_PREVIEW_MAX = 220
+
     def __init__(
         self,
         model_id: str,
@@ -61,24 +64,48 @@ class ASRService:
         if self._model is None:
             raise RuntimeError("model not loaded")
 
+        request_started = time.perf_counter()
         suffix = Path(audio.filename or "audio.wav").suffix or ".wav"
         tmp_audio_path = await run_in_threadpool(self._save_upload_to_temp_sync, audio.file, suffix)
         out_base = self.temp_dir / f"transcript-{uuid.uuid4()}"
 
         try:
+            transcription_started = time.perf_counter()
             async with self._transcription_lock:
                 result = await run_in_threadpool(self._transcribe_sync, tmp_audio_path, out_base)
+            transcription_ms = (time.perf_counter() - transcription_started) * 1000.0
+
             raw_text = (getattr(result, "text", "") or "").strip()
+            cleanup_started = time.perf_counter()
             text = await self._postprocess_transcript(raw_text)
+            cleanup_ms = (time.perf_counter() - cleanup_started) * 1000.0
+            total_ms = (time.perf_counter() - request_started) * 1000.0
+
             if self.log_transcripts:
-                if text != raw_text:
-                    logger.info("transcript raw: %s", raw_text)
-                    logger.info("transcript cleaned: %s", text)
-                else:
-                    logger.info("transcript: %s", text)
+                logger.info(
+                    (
+                        "transcribe_result\n"
+                        "  transcription_ms: %.1f\n"
+                        "  cleanup_ms: %.1f\n"
+                        "  total_ms: %.1f\n"
+                        "  raw: %s\n"
+                        "  final: %s"
+                    ),
+                    transcription_ms,
+                    cleanup_ms,
+                    total_ms,
+                    self._preview_for_log(raw_text),
+                    self._preview_for_log(text),
+                )
             return text
         finally:
             self._cleanup_temp_files(tmp_audio_path, out_base)
+
+    def _preview_for_log(self, text: str) -> str:
+        normalized = " ".join(text.split())
+        if len(normalized) <= self._LOG_TEXT_PREVIEW_MAX:
+            return normalized
+        return f"{normalized[: self._LOG_TEXT_PREVIEW_MAX - 1]}…"
 
     async def _postprocess_transcript(self, text: str) -> str:
         if not self.transcript_cleaner or not text:
