@@ -46,32 +46,38 @@ final class OpenWhisperController {
 
     private func handleStopAndTranscribe() {
         guard !isBusy else { return }
-        guard let audioURL = recorder.stop() else {
-            onStateChange?(.idle)
-            return
-        }
-
         isBusy = true
-        onStateChange?(.transcribing)
-        print("[Open Whisper] transcribing audio...")
-
-        asrClient.transcribe(audioFileURL: audioURL) { [weak self] result in
+        recorder.stop { [weak self] audioURL in
             Task { @MainActor in
                 guard let self else { return }
-                defer {
+                guard let audioURL else {
                     self.isBusy = false
                     self.onStateChange?(.idle)
-                    try? FileManager.default.removeItem(at: audioURL)
+                    return
                 }
 
-                switch result {
-                case .success(let text):
-                    let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !cleaned.isEmpty {
-                        self.textInjector.insert(text: cleaned)
+                self.onStateChange?(.transcribing)
+                print("[Open Whisper] transcribing audio...")
+
+                self.asrClient.transcribe(audioFileURL: audioURL) { [weak self] result in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        defer {
+                            self.isBusy = false
+                            self.onStateChange?(.idle)
+                            try? FileManager.default.removeItem(at: audioURL)
+                        }
+
+                        switch result {
+                        case .success(let text):
+                            let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !cleaned.isEmpty {
+                                self.textInjector.insert(text: cleaned)
+                            }
+                        case .failure:
+                            self.onStateChange?(.error)
+                        }
                     }
-                case .failure:
-                    self.onStateChange?(.error)
                 }
             }
         }
