@@ -1,0 +1,12 @@
+.DS_Store
+.build
+.swiftpm
+.venv
+.uv-cache
+.env
+.env.local
+dist
+models
+uv.lock
+__pycache__
+*.pyc
