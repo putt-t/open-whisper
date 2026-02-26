@@ -10,6 +10,7 @@ Local macOS dictation app:
 - macOS (Apple Silicon recommended)
 - `uv`
 - Xcode Command Line Tools
+- For `whisperkit` provider: WhisperKit local server running (see section below)
 
 ## Fresh Start (first time)
 
@@ -147,13 +148,20 @@ rm -rf models/ dist/ .build/ .venv/ .uv-cache/
 ## Config (`.env`)
 
 Main vars:
-- `DICTATION_MODEL` (default: `mlx-community/Qwen3-ASR-1.7B-6bit`)
-- `DICTATION_MODEL_DIR` (default: `models/Qwen3-ASR-1.7B-6bit`)
+- `DICTATION_ASR_PROVIDER` (`qwen` or `whisperkit`, default: `qwen`)
+- `DICTATION_MODEL` (default: `mlx-community/Qwen3-ASR-1.7B-8bit`)
+- `DICTATION_MODEL_DIR` (default: `models/Qwen3-ASR-1.7B-8bit`)
 - `DICTATION_TMP_DIR` (default: OS temp dir + `/dictation-asr`)
+- `DICTATION_WHISPERKIT_ENDPOINT` (default: `http://127.0.0.1:50060/v1/audio/transcriptions`)
+- `DICTATION_WHISPERKIT_MODEL` (default: `large-v3`)
+- `DICTATION_WHISPERKIT_TIMEOUT_SECONDS` (default: `30`)
+- `DICTATION_WHISPERKIT_LANGUAGE` (optional; e.g. `en`)
+- `DICTATION_WHISPERKIT_PROMPT` (optional prompt text for transcription guidance)
 - `DICTATION_LOG_TRANSCRIPTS` (default: `true`)
 - `DICTATION_ASR_TOKEN_FILE` (default: `~/.dictation/asr-token`)
 - `DICTATION_CLEANUP_ENABLED` (default: `false`) enables post-processing with Apple Foundation Models
 - `DICTATION_CLEANUP_INSTRUCTIONS` (default: built-in cleanup prompt) controls cleanup behavior
+- `DICTATION_CLEANUP_USER_DICTIONARY` (optional comma/newline-separated terms) preferred canonical spellings for cleanup correction
 - `DICTATION_ASR_HOST` (default: `127.0.0.1`)
 - `DICTATION_ASR_PORT` (default: `8765`)
 - `DICTATION_BUNDLE_ID` (default: `com.example.dictation`)
@@ -173,3 +181,37 @@ DICTATION_CLEANUP_ENABLED=true
 ```
 
 When enabled, raw transcript text is rewritten to remove filler words, pauses, stutters, and false starts while preserving intended meaning.
+
+### ASR provider options
+
+#### Provider: Qwen (default)
+
+1. Set in `.env`:
+```bash
+DICTATION_ASR_PROVIDER=qwen
+```
+2. Setup/download model:
+```bash
+./scripts/dictation.sh setup
+```
+3. Start backend:
+```bash
+./scripts/dictation.sh serve
+```
+
+#### Provider: WhisperKit
+
+1. Set in `.env`:
+```bash
+DICTATION_ASR_PROVIDER=whisperkit
+DICTATION_WHISPERKIT_ENDPOINT=http://127.0.0.1:50060/v1/audio/transcriptions
+DICTATION_WHISPERKIT_MODEL=large-v3
+```
+2. Start WhisperKit local server separately (example):
+```bash
+whisperkit-cli serve --host 127.0.0.1 --port 50060
+```
+3. Start this backend:
+```bash
+./scripts/dictation.sh serve
+```

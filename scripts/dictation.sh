@@ -40,13 +40,16 @@ setup_cmd() {
 
   UV_CACHE_DIR="${UV_CACHE_DIR:-.uv-cache}" uv sync --prerelease=allow
 
-  MODEL_ID="${DICTATION_MODEL:-mlx-community/Qwen3-ASR-1.7B-6bit}"
-  LOCAL_DIR="${DICTATION_MODEL_DIR:-models/Qwen3-ASR-1.7B-6bit}"
-
-  UV_CACHE_DIR="${UV_CACHE_DIR:-.uv-cache}" uv run huggingface-cli download --local-dir "$LOCAL_DIR" "$MODEL_ID"
-
   echo "uv environment ready."
-  echo "Model downloaded to: $LOCAL_DIR"
+  ASR_PROVIDER="${DICTATION_ASR_PROVIDER:-qwen}"
+  if [[ "$ASR_PROVIDER" == "qwen" ]]; then
+    MODEL_ID="${DICTATION_MODEL:-mlx-community/Qwen3-ASR-1.7B-6bit}"
+    LOCAL_DIR="${DICTATION_MODEL_DIR:-models/Qwen3-ASR-1.7B-6bit}"
+    UV_CACHE_DIR="${UV_CACHE_DIR:-.uv-cache}" uv run huggingface-cli download --local-dir "$LOCAL_DIR" "$MODEL_ID"
+    echo "Qwen model downloaded to: $LOCAL_DIR"
+  else
+    echo "Skipping local model download for provider: $ASR_PROVIDER"
+  fi
 }
 
 serve_cmd() {

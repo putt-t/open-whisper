@@ -20,8 +20,9 @@ class _CleanerState:
 class AppleTranscriptCleaner:
     """Optional transcript cleanup using Apple's Foundation Models SDK."""
 
-    def __init__(self, instructions: str) -> None:
+    def __init__(self, instructions: str, user_dictionary_terms: list[str] | None = None) -> None:
         self.instructions = instructions
+        self.user_dictionary_terms = user_dictionary_terms or []
         self._state = _CleanerState()
         self._availability_lock = asyncio.Lock()
 
@@ -39,23 +40,14 @@ class AppleTranscriptCleaner:
         )
 
         prompt = (
-            "You are a transcript cleanup engine.\n"
-            "Apply these rules in order:\n"
-            "1) Remove filler words, stutters, and false starts.\n"
-            "2) If the speaker revises/retracts earlier content, keep only the final surviving intent.\n"
-            "3) If two statements conflict, the latest statement wins.\n"
-            "4) Never include discarded alternatives together with the final choice.\n"
-            "5) Keep decisive correction cues (e.g. 'actually', 'wait', 'no', 'instead') as signals and resolve to the final choice.\n"
-            "6) If no cleanup is needed, return the input unchanged.\n"
-            "7) Keep original language and tone, and do not add information.\n"
-            "8) Return only the final cleaned text.\n"
-            "Example:\n"
-            "Raw: We shipped it. Actually, no, not shipped yet.\n"
-            "Cleaned: It's not shipped yet.\n"
-            "Example:\n"
-            "Raw: Use Rust. Wait, use Python.\n"
-            "Cleaned: Use Python.\n"
-            f"Raw transcript:\n{text}"
+            "Clean this raw speech transcript.\n"
+            "Remove disfluencies and resolve self-corrections to the final intended meaning.\n"
+            "If no cleanup is needed, return the same text.\n"
+            f"{self._dictionary_prompt_section()}"
+            "Return only plain cleaned transcript text.\n"
+            "No labels, no explanations, no markdown.\n\n"
+            "Transcript:\n"
+            f"\"\"\"\n{text}\n\"\"\""
         )
 
         try:
@@ -66,6 +58,17 @@ class AppleTranscriptCleaner:
 
         cleaned = str(result).strip()
         return cleaned or text
+
+    def _dictionary_prompt_section(self) -> str:
+        if not self.user_dictionary_terms:
+            return ""
+
+        terms = "\n".join(f"- {term}" for term in self.user_dictionary_terms)
+        return (
+            "User dictionary terms (preferred canonical spellings):\n"
+            f"{terms}\n"
+            "If context suggests one of these was mis-transcribed, correct it to the canonical spelling.\n"
+        )
 
     async def _ensure_model(self) -> bool:
         if self._state.checked:
