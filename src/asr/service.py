@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
+import os
+import secrets
 import shutil
 import tempfile
 import uuid
@@ -16,11 +19,19 @@ logger = logging.getLogger(__name__)
 
 
 class ASRService:
-    def __init__(self, model_id: str, temp_dir: Path, log_transcripts: bool = True) -> None:
+    def __init__(
+        self,
+        model_id: str,
+        temp_dir: Path,
+        auth_token_file: Path,
+        log_transcripts: bool = True,
+    ) -> None:
         self.model_id = model_id
         self.temp_dir = temp_dir
+        self.auth_token_file = auth_token_file
         self.log_transcripts = log_transcripts
         self._model = None
+        self._auth_token: str | None = None
         self._transcription_lock = asyncio.Lock()
 
     @property
@@ -29,11 +40,19 @@ class ASRService:
 
     async def startup(self) -> None:
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self._auth_token = self._load_or_create_auth_token()
+        logger.info("ASR auth token file: %s", self.auth_token_file)
         self._model = await run_in_threadpool(load_model, self.model_id)
         logger.info("ASR model loaded: %s", self.model_id)
 
     async def shutdown(self) -> None:
         self._model = None
+        self._auth_token = None
+
+    def authorize(self, token: str | None) -> bool:
+        if not token or not self._auth_token:
+            return False
+        return hmac.compare_digest(token, self._auth_token)
 
     async def transcribe(self, audio: UploadFile) -> str:
         if self._model is None:
@@ -83,3 +102,29 @@ class ASRService:
                 path.unlink(missing_ok=True)
             except Exception:
                 logger.debug("Could not remove temp file: %s", path)
+
+    def _load_or_create_auth_token(self) -> str:
+        token_dir = self.auth_token_file.parent
+        token_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(token_dir, 0o700)
+        except OSError:
+            logger.debug("Could not set directory permissions: %s", token_dir)
+
+        token = ""
+        if self.auth_token_file.exists():
+            token = self.auth_token_file.read_text(encoding="utf-8").strip()
+
+        if not token:
+            token = secrets.token_urlsafe(32)
+            fd = os.open(self.auth_token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as token_file:
+                token_file.write(token)
+                token_file.write("\n")
+
+        try:
+            os.chmod(self.auth_token_file, 0o600)
+        except OSError:
+            logger.debug("Could not set file permissions: %s", self.auth_token_file)
+
+        return token

@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_ASR_LOCAL_MODEL = Path("models/Qwen3-ASR-1.7B-6bit")
 DEFAULT_ASR_REPO = "mlx-community/Qwen3-ASR-1.7B-6bit"
+DEFAULT_ASR_TOKEN_FILE = Path.home() / ".dictation" / "asr-token"
 
 
 class Settings(BaseSettings):
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
         alias="DICTATION_TMP_DIR",
     )
     dictation_log_transcripts: bool = Field(default=True, alias="DICTATION_LOG_TRANSCRIPTS")
+    dictation_asr_token_file: Path = Field(
+        default=DEFAULT_ASR_TOKEN_FILE,
+        alias="DICTATION_ASR_TOKEN_FILE",
+    )
 
     @property
     def resolved_model_id(self) -> str:

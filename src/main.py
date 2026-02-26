@@ -18,6 +18,7 @@ async def lifespan(app: FastAPI):
     asr_service = ASRService(
         model_id=settings.resolved_model_id,
         temp_dir=settings.dictation_tmp_dir,
+        auth_token_file=settings.dictation_asr_token_file,
         log_transcripts=settings.dictation_log_transcripts,
     )
     app.state.asr_service = asr_service
@@ -30,4 +31,3 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Local Dictation ASR", lifespan=lifespan)
 app.include_router(asr_router)
-
