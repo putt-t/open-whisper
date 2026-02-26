@@ -1,0 +1,7 @@
+[project]
+name = "open-whisper"
+version = "0.1.0"
+description = "Open Whisper is a tool for transcribing voice into any input box you want."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
