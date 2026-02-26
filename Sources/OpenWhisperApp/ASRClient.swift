@@ -2,6 +2,7 @@ import Foundation
 
 final class ASRClient {
     private let endpoint: URL
+    private let tokenFileURL: URL
     private let session: URLSession
 
     init(endpoint: URL? = nil) {
@@ -11,6 +12,14 @@ final class ASRClient {
             self.endpoint = url
         } else {
             self.endpoint = URL(string: "http://127.0.0.1:8765/transcribe")!
+        }
+
+        if let env = ProcessInfo.processInfo.environment["DICTATION_ASR_TOKEN_FILE"], !env.isEmpty {
+            self.tokenFileURL = URL(fileURLWithPath: env)
+        } else {
+            self.tokenFileURL = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".dictation")
+                .appendingPathComponent("asr-token")
         }
 
         let config = URLSessionConfiguration.ephemeral
@@ -31,6 +40,7 @@ final class ASRClient {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         do {
+            request.setValue(try loadAuthToken(), forHTTPHeaderField: "X-Dictation-Token")
             request.httpBody = try buildBody(audioFileURL: audioFileURL, boundary: boundary)
         } catch {
             completion(.failure(error))
@@ -77,6 +87,29 @@ final class ASRClient {
         body.append("--\(boundary)--\r\n")
 
         return body
+    }
+
+    private func loadAuthToken() throws -> String {
+        let rawToken: String
+        do {
+            rawToken = try String(contentsOf: tokenFileURL, encoding: .utf8)
+        } catch {
+            throw NSError(
+                domain: "ASRClient",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Could not read ASR token at \(tokenFileURL.path). Start backend first."]
+            )
+        }
+
+        let token = rawToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            throw NSError(
+                domain: "ASRClient",
+                code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "ASR token file is empty at \(tokenFileURL.path)."]
+            )
+        }
+        return token
     }
 }
 
