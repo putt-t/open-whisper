@@ -44,8 +44,10 @@ final class OpenWhisperHUD {
         switch state {
         case .idle:
             hide()
-        case .recording, .transcribing:
-            show()
+        case .recording:
+            showRecording()
+        case .transcribing:
+            showTranscribing()
         case .error:
             show()
             indicator.setErrorStyle()
@@ -56,9 +58,18 @@ final class OpenWhisperHUD {
     }
 
     private func show() {
-        indicator.setActiveStyle()
         positionTopCenter()
         panel.orderFrontRegardless()
+    }
+
+    private func showRecording() {
+        show()
+        indicator.setRecordingStyle()
+    }
+
+    private func showTranscribing() {
+        show()
+        indicator.setTranscribingStyle()
     }
 
     private func hide() {
@@ -97,10 +108,17 @@ private final class PulseIndicatorView: NSView {
         updateLayerFrames()
     }
 
-    func setActiveStyle() {
+    func setRecordingStyle() {
         let color = NSColor.systemRed
         dotLayer.backgroundColor = color.cgColor
         ringLayer.strokeColor = color.withAlphaComponent(0.65).cgColor
+        startAnimating()
+    }
+
+    func setTranscribingStyle() {
+        let color = NSColor.systemBlue
+        dotLayer.backgroundColor = color.cgColor
+        ringLayer.strokeColor = color.withAlphaComponent(0.45).cgColor
         startAnimating()
     }
 
