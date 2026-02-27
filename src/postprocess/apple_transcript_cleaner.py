@@ -42,6 +42,8 @@ class AppleTranscriptCleaner:
         prompt = (
             "Clean this raw speech transcript.\n"
             "Remove disfluencies and resolve self-corrections to the final intended meaning.\n"
+            "When the speaker changes their mind, keep only the final decision and remove superseded clauses.\n"
+            "Prefer a concise final sentence that states only the surviving intent.\n"
             "If no cleanup is needed, return the same text.\n"
             f"{self._dictionary_prompt_section()}"
             "Return only plain cleaned transcript text.\n"

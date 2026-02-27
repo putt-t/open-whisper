@@ -65,6 +65,7 @@ class Settings(BaseSettings):
             "Preserve meaning, intent, entities, and factual content. "
             "Remove filler words, false starts, repeated fragments, and disfluencies. "
             "If the speaker revises or retracts earlier content, keep only the latest surviving intent. "
+            "When there are corrections, compress to a concise final statement of the surviving intent. "
             "Never include discarded alternatives together with the final chosen option. "
             "If there is no disfluency or correction, keep text unchanged. "
             "Keep the original language and tone. "
