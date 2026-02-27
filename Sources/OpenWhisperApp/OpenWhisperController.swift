@@ -115,7 +115,8 @@ final class OpenWhisperController {
                             if !cleaned.isEmpty {
                                 self.textInjector.insert(text: cleaned)
                             }
-                        case .failure:
+                        case .failure(let error):
+                            print("[Open Whisper] transcribe failed: \(error.localizedDescription)")
                             self.onStateChange?(.error)
                         }
                     }

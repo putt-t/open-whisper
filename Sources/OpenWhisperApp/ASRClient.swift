@@ -15,7 +15,8 @@ final class ASRClient {
         }
 
         if let env = ProcessInfo.processInfo.environment["DICTATION_ASR_TOKEN_FILE"], !env.isEmpty {
-            self.tokenFileURL = URL(fileURLWithPath: env)
+            let expanded = NSString(string: env).expandingTildeInPath
+            self.tokenFileURL = URL(fileURLWithPath: expanded)
         } else {
             self.tokenFileURL = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".dictation")

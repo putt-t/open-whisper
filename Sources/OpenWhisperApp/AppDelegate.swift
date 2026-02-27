@@ -5,8 +5,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let statusMenu = NSMenu()
     private let microphoneSubmenu = NSMenu(title: "Microphone")
+    private let settingsStore = AppSettingsStore()
     private let controller = OpenWhisperController()
     private let hud = OpenWhisperHUD()
+    private let backendProcess = BackendProcess()
+    private lazy var settingsWindowController = SettingsWindowController(store: settingsStore, backendProcess: backendProcess)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("[Open Whisper] launched")
@@ -17,6 +20,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         controller.start()
+
+        do {
+            try backendProcess.start()
+        } catch {
+            print("[Open Whisper] failed to start backend: \(error)")
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        backendProcess.stop()
     }
 
     private func setupStatusItem() {
@@ -34,7 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let permissionsItem = NSMenuItem(title: "Open Permissions", action: #selector(openPermissions), keyEquivalent: "p")
         permissionsItem.target = self
+        permissionsItem.image = NSImage(systemSymbolName: "lock.shield", accessibilityDescription: "Open Permissions")
         statusMenu.addItem(permissionsItem)
+
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
+        statusMenu.addItem(settingsItem)
+
         statusMenu.addItem(NSMenuItem.separator())
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
@@ -104,6 +124,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openPermissions() {
         Permissions.openSecurityPrivacySettings()
+    }
+
+    @objc private func openSettings() {
+        settingsWindowController.show()
     }
 
     @objc private func quit() {
