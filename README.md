@@ -3,6 +3,7 @@
 Local macOS dictation app:
 - Hold `Fn` to record
 - Release `Fn` to transcribe
+- Press `Fn + Space` while recording to lock recording mode; press `Fn` again to stop and transcribe
 - Text is pasted into the focused text field
 
 ## Requirements
