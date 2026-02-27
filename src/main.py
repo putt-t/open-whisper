@@ -15,12 +15,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 
 def _build_transcriber(settings) -> Transcriber:
-    if settings.dictation_asr_provider == "whisperkit":
+    if settings.effective_asr_provider == "whisperkit":
         return WhisperKitTranscriber(
             endpoint=settings.dictation_whisperkit_endpoint,
-            model_id=settings.dictation_whisperkit_model,
+            model_id=settings.effective_whisperkit_model,
             timeout_seconds=settings.dictation_whisperkit_timeout_seconds,
-            language=settings.dictation_whisperkit_language,
+            language=settings.effective_whisperkit_language,
             prompt=settings.dictation_whisperkit_prompt,
         )
 
@@ -37,9 +37,9 @@ async def lifespan(app: FastAPI):
     transcript_cleaner = (
         AppleTranscriptCleaner(
             instructions=settings.dictation_cleanup_instructions,
-            user_dictionary_terms=settings.cleanup_user_dictionary_terms,
+            user_dictionary_terms=settings.effective_cleanup_user_dictionary_terms,
         )
-        if settings.dictation_cleanup_enabled
+        if settings.effective_cleanup_enabled
         else None
     )
     asr_service = ASRService(
