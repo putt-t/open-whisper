@@ -4,6 +4,7 @@ Local macOS dictation app:
 - Hold `Fn` to record
 - Release `Fn` to transcribe
 - Press `Fn + Space` while recording to lock recording mode; press `Fn` again to stop and transcribe
+- Configure provider/cleanup/dictionary in app menu -> `Settings...`
 - Text is pasted into the focused text field
 
 ## Requirements
@@ -46,56 +47,33 @@ To remove the certificate later:
 
 ```bash
 ./scripts/dictation.sh bundle --install
-```
-
-1. Start backend in terminal 1:
-```bash
-./scripts/dictation.sh serve
-```
-The backend creates a local auth token file at `~/.dictation/asr-token` (override with `DICTATION_ASR_TOKEN_FILE`).
-2. Start app:
-```bash
 open "$HOME/Applications/Dictation.app"
 ```
-3. Grant `Dictation.app` permissions:
+
+The app automatically starts and manages the Python backend process.
+A local auth token file is created at `~/.dictation/asr-token` (override with `DICTATION_ASR_TOKEN_FILE`).
+
+Grant `Dictation.app` permissions:
 - Microphone
 - Accessibility
 - Input Monitoring
-4. (Optional) Choose a specific microphone from the menu bar icon:
+(Optional) Choose a specific microphone from the menu bar icon:
 - `Microphone -> <device name>`
-
-5. Quit app and reopen using same method as above.
 
 ## Already Downloaded (normal daily use)
 
-1. Start backend:
-```bash
-./scripts/dictation.sh serve
-```
-2. Open app:
 ```bash
 open "$HOME/Applications/Dictation.app"
 ```
-3. (Optional) Select input device from:
-- `Microphone -> <device name>`
+
+The backend starts automatically with the app and restarts when you change settings.
 
 ## After Pulling Code Updates
 
-1. Pull:
 ```bash
 git pull
-```
-2. If Python dependencies or model defaults changed, run:
-```bash
-./scripts/dictation.sh setup
-```
-3. Always restart backend:
-```bash
-./scripts/dictation.sh serve
-```
-4. If Swift app code changed (`Sources/`, `Package.swift`), rebuild app:
-```bash
-./scripts/dictation.sh bundle --install
+./scripts/dictation.sh setup          # if Python deps or model defaults changed
+./scripts/dictation.sh bundle --install  # if Swift code changed
 open "$HOME/Applications/Dictation.app"
 ```
 
@@ -148,25 +126,23 @@ rm -rf models/ dist/ .build/ .venv/ .uv-cache/
 
 ## Config (`.env`)
 
-Main vars:
-- `DICTATION_ASR_PROVIDER` (`qwen` or `whisperkit`, default: `qwen`)
-- `DICTATION_MODEL` (default: `mlx-community/Qwen3-ASR-1.7B-8bit`)
-- `DICTATION_MODEL_DIR` (default: `models/Qwen3-ASR-1.7B-8bit`)
-- `DICTATION_TMP_DIR` (default: OS temp dir + `/dictation-asr`)
-- `DICTATION_WHISPERKIT_ENDPOINT` (default: `http://127.0.0.1:50060/v1/audio/transcriptions`)
-- `DICTATION_WHISPERKIT_MODEL` (default: `large-v3`)
-- `DICTATION_WHISPERKIT_TIMEOUT_SECONDS` (default: `30`)
-- `DICTATION_WHISPERKIT_LANGUAGE` (optional; e.g. `en`)
-- `DICTATION_WHISPERKIT_PROMPT` (optional prompt text for transcription guidance)
-- `DICTATION_LOG_TRANSCRIPTS` (default: `true`)
-- `DICTATION_ASR_TOKEN_FILE` (default: `~/.dictation/asr-token`)
-- `DICTATION_CLEANUP_ENABLED` (default: `false`) enables post-processing with Apple Foundation Models
-- `DICTATION_CLEANUP_INSTRUCTIONS` (default: built-in cleanup prompt) controls cleanup behavior
-- `DICTATION_CLEANUP_USER_DICTIONARY` (optional comma/newline-separated terms) preferred canonical spellings for cleanup correction
-- `DICTATION_ASR_HOST` (default: `127.0.0.1`)
-- `DICTATION_ASR_PORT` (default: `8765`)
-- `DICTATION_BUNDLE_ID` (default: `com.example.dictation`)
-- `DICTATION_CODESIGN_IDENTITY` (default: `-` for ad-hoc; set to a certificate name like `DictationDev` to persist permissions across rebuilds)
+Most users only need:
+- `DICTATION_BUNDLE_ID`
+- `DICTATION_CODESIGN_IDENTITY`
+- `DICTATION_SETTINGS_FILE`
+
+Advanced overrides (optional):
+- `DICTATION_PROJECT_ROOT`
+- `DICTATION_WHISPERKIT_ENDPOINT`
+- `DICTATION_ASR_TOKEN_FILE`
+
+All provider/cleanup/dictionary behavior should be managed in the app `Settings...` window.
+
+Settings precedence:
+1. Process environment variables (exported in shell / launch environment)
+2. Settings JSON written by the app (`Settings...` window)
+3. `.env` / `.env.local`
+4. Built-in defaults
 
 ### Optional: Apple Foundation Model cleanup pass
 
@@ -187,32 +163,24 @@ When enabled, raw transcript text is rewritten to remove filler words, pauses, s
 
 #### Provider: Qwen (default)
 
-1. Set in `.env`:
+Set in `.env`:
 ```bash
 DICTATION_ASR_PROVIDER=qwen
 ```
-2. Setup/download model:
+Download model:
 ```bash
 ./scripts/dictation.sh setup
-```
-3. Start backend:
-```bash
-./scripts/dictation.sh serve
 ```
 
 #### Provider: WhisperKit
 
-1. Set in `.env`:
+Set in `.env`:
 ```bash
 DICTATION_ASR_PROVIDER=whisperkit
 DICTATION_WHISPERKIT_ENDPOINT=http://127.0.0.1:50060/v1/audio/transcriptions
 DICTATION_WHISPERKIT_MODEL=large-v3
 ```
-2. Start WhisperKit local server separately (example):
+Start WhisperKit local server separately:
 ```bash
 whisperkit-cli serve --host 127.0.0.1 --port 50060
-```
-3. Start this backend:
-```bash
-./scripts/dictation.sh serve
 ```

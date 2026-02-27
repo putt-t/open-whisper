@@ -20,14 +20,10 @@ usage() {
   cat <<'EOF'
 Usage:
   ./scripts/dictation.sh setup
-  ./scripts/dictation.sh serve
-  ./scripts/dictation.sh app
   ./scripts/dictation.sh bundle [--install]
 
 Commands:
   setup   Install Python deps with uv and download model files
-  serve   Run ASR service (uvicorn)
-  app     Run the menu bar app in dev mode (swift run)
   bundle  Build standalone Dictation.app (optional --install to ~/Applications)
 EOF
 }
@@ -50,17 +46,6 @@ setup_cmd() {
   else
     echo "Skipping local model download for provider: $ASR_PROVIDER"
   fi
-}
-
-serve_cmd() {
-  HOST="${DICTATION_ASR_HOST:-127.0.0.1}"
-  PORT="${DICTATION_ASR_PORT:-8765}"
-
-  UV_CACHE_DIR="${UV_CACHE_DIR:-.uv-cache}" exec uv run uvicorn src.main:app --host "$HOST" --port "$PORT"
-}
-
-app_cmd() {
-  swift run open-whisper
 }
 
 bundle_cmd() {
@@ -115,6 +100,8 @@ bundle_cmd() {
   <string>14.0</string>
   <key>LSUIElement</key>
   <true/>
+  <key>DictationProjectRoot</key>
+  <string>${ROOT_DIR}</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Dictation needs microphone access to transcribe your speech.</string>
   <key>NSHighResolutionCapable</key>
@@ -149,14 +136,6 @@ case "${1:-}" in
   setup)
     shift
     setup_cmd "$@"
-    ;;
-  serve)
-    shift
-    serve_cmd "$@"
-    ;;
-  app)
-    shift
-    app_cmd "$@"
     ;;
   bundle)
     shift
