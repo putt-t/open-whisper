@@ -20,9 +20,17 @@ class _CleanerState:
 class AppleTranscriptCleaner:
     """Optional transcript cleanup using Apple's Foundation Models SDK."""
 
-    def __init__(self, instructions: str, user_dictionary_terms: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        instructions: str,
+        user_dictionary_terms: list[str] | None = None,
+        debug: bool = False,
+        temperature: float = 0.1,
+    ) -> None:
         self.instructions = instructions
         self.user_dictionary_terms = user_dictionary_terms or []
+        self.debug = debug
+        self.temperature = temperature
         self._state = _CleanerState()
         self._availability_lock = asyncio.Lock()
 
@@ -47,9 +55,11 @@ class AppleTranscriptCleaner:
             "If no cleanup is needed, return the same text.\n"
             f"{self._dictionary_prompt_section()}"
             "Return only plain cleaned transcript text.\n"
-            "No labels, no explanations, no markdown.\n\n"
-            "Transcript:\n"
-            f"\"\"\"\n{text}\n\"\"\""
+            "No labels, no explanations, no markdown.\n"
+            "Do not wrap output in quotes, backticks, or code fences.\n\n"
+            "<transcript>\n"
+            f"{text}\n"
+            "</transcript>"
         )
 
         try:
@@ -59,6 +69,8 @@ class AppleTranscriptCleaner:
             return text
 
         cleaned = str(result).strip()
+        if self.debug:
+            logger.info("Apple cleanup model_output_raw: %s", str(result))
         return cleaned or text
 
     def _dictionary_prompt_section(self) -> str:
@@ -69,7 +81,10 @@ class AppleTranscriptCleaner:
         return (
             "User dictionary terms (preferred canonical spellings):\n"
             f"{terms}\n"
-            "If context suggests one of these was mis-transcribed, correct it to the canonical spelling.\n"
+            "Treat these as high-priority canonical spellings.\n"
+            "If transcript words are phonetically similar to a dictionary term, normalize to the dictionary term.\n"
+            "This includes split/space-separated ASR variants that sound like one term.\n"
+            "Do not force replacements when phonetic/context match is weak.\n"
         )
 
     async def _ensure_model(self) -> bool:
@@ -88,12 +103,12 @@ class AppleTranscriptCleaner:
             self._state.fm = fm
 
             try:
+                model_kwargs: dict[str, Any] = {"temperature": self.temperature}
                 if hasattr(fm, "SystemLanguageModelGuardrails"):
-                    model = fm.SystemLanguageModel(
-                        guardrails=fm.SystemLanguageModelGuardrails.PERMISSIVE_CONTENT_TRANSFORMATIONS
+                    model_kwargs["guardrails"] = (
+                        fm.SystemLanguageModelGuardrails.PERMISSIVE_CONTENT_TRANSFORMATIONS
                     )
-                else:
-                    model = fm.SystemLanguageModel()
+                model = fm.SystemLanguageModel(**model_kwargs)
                 available, reason = model.is_available()
             except Exception as exc:
                 self._mark_unavailable(f"availability check failed: {exc}")
