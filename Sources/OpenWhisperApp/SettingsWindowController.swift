@@ -9,10 +9,15 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
     private let backendProcess: BackendProcess
 
     private let providerPopup = NSPopUpButton()
+    private let debugModeCheckbox = NSButton(checkboxWithTitle: "Debug Mode (stops backend — run manually)", target: nil, action: nil)
     private let modelInfoLabel = NSTextField(labelWithString: "")
     private let whisperkitModelField = NSTextField()
     private let whisperkitLanguageField = NSTextField()
     private let cleanupEnabledCheckbox = NSButton(checkboxWithTitle: "Enable Cleanup", target: nil, action: nil)
+    private let cleanupProviderPopup = NSPopUpButton()
+    private let cleanupModelField = NSTextField()
+    private let cleanupSystemPromptView = NSTextView()
+    private let cleanupSystemPromptScrollView = NSScrollView()
     private let dictionaryInputField = NSTextField()
     private let dictionaryAddButton = NSButton(title: "Add", target: nil, action: nil)
     private let dictionaryDisclosureButton = NSButton(title: "", target: nil, action: nil)
@@ -23,6 +28,9 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
 
     private var whisperkitModelRow: NSView!
     private var whisperkitLanguageRow: NSView!
+    private var cleanupProviderRow: NSView!
+    private var cleanupModelRow: NSView!
+    private var cleanupSystemPromptRow: NSView!
 
     private var settings = AppSettings()
     private var dictionaryTerms: [String] = []
@@ -33,7 +41,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         self.backendProcess = backendProcess
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -55,6 +63,18 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    private static let defaultCleanupSystemPrompt =
+        "You clean raw speech-to-text transcripts into final user-ready text. " +
+        "Preserve meaning, intent, entities, and factual content. " +
+        "Remove filler words, false starts, repeated fragments, and disfluencies. " +
+        "If the speaker revises or retracts earlier content, keep only the latest surviving intent. " +
+        "When there are corrections, compress to a concise final statement of the surviving intent. " +
+        "Never include discarded alternatives together with the final chosen option. " +
+        "If there is no disfluency or correction, keep text unchanged. " +
+        "Keep the original language and tone. " +
+        "Do not wrap output in quotation marks, backticks, or code fences. " +
+        "Do not add new information. Return only the cleaned final text."
     private func makeLabeledField(_ label: String, control: NSView) -> NSStackView {
         let title = NSTextField(labelWithString: label)
         title.font = NSFont.systemFont(ofSize: 12, weight: .medium)
@@ -100,9 +120,31 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         providerPopup.addItems(withTitles: ["qwen", "whisperkit"])
         providerPopup.target = self
         providerPopup.action = #selector(providerChanged)
+        debugModeCheckbox.target = self
+        debugModeCheckbox.action = #selector(debugModeToggled)
 
         whisperkitModelField.placeholderString = "openai_whisper-large-v3-v20240930"
         whisperkitLanguageField.placeholderString = "en"
+        cleanupProviderPopup.addItems(withTitles: ["apple", "lmstudio"])
+        cleanupProviderPopup.target = self
+        cleanupProviderPopup.action = #selector(cleanupProviderChanged)
+        cleanupModelField.placeholderString = "essentialai/rnj-1"
+
+        cleanupSystemPromptView.isRichText = false
+        cleanupSystemPromptView.importsGraphics = false
+        cleanupSystemPromptView.isAutomaticQuoteSubstitutionEnabled = false
+        cleanupSystemPromptView.font = NSFont.systemFont(ofSize: 12)
+        cleanupSystemPromptView.textColor = .labelColor
+        cleanupSystemPromptView.backgroundColor = .textBackgroundColor
+        cleanupSystemPromptView.string = Self.defaultCleanupSystemPrompt
+
+        cleanupSystemPromptScrollView.borderType = .lineBorder
+        cleanupSystemPromptScrollView.hasVerticalScroller = true
+        cleanupSystemPromptScrollView.hasHorizontalScroller = false
+        cleanupSystemPromptScrollView.autohidesScrollers = true
+        cleanupSystemPromptScrollView.documentView = cleanupSystemPromptView
+        cleanupSystemPromptScrollView.translatesAutoresizingMaskIntoConstraints = false
+        cleanupSystemPromptScrollView.heightAnchor.constraint(equalToConstant: 120).isActive = true
 
         dictionaryInputField.placeholderString = "Type a word and press Enter"
         dictionaryInputField.target = self
@@ -151,6 +193,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
 
         let providerField = makeLabeledField("ASR Provider", control: providerPopup)
         container.addArrangedSubview(providerField)
+        container.addArrangedSubview(debugModeCheckbox)
 
         modelInfoLabel.font = NSFont.systemFont(ofSize: 11)
         modelInfoLabel.textColor = .secondaryLabelColor
@@ -174,6 +217,21 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         container.setCustomSpacing(sectionSpacing, after: sep1)
         container.addArrangedSubview(makeSectionHeader("Post-Processing"))
         container.addArrangedSubview(cleanupEnabledCheckbox)
+
+        cleanupProviderRow = makeLabeledField("Cleanup Provider", control: cleanupProviderPopup)
+        container.addArrangedSubview(cleanupProviderRow)
+        cleanupProviderPopup.leadingAnchor.constraint(equalTo: cleanupProviderRow.leadingAnchor).isActive = true
+        cleanupProviderPopup.trailingAnchor.constraint(equalTo: container.trailingAnchor).isActive = true
+
+        cleanupModelRow = makeLabeledField("LM Studio Model", control: cleanupModelField)
+        container.addArrangedSubview(cleanupModelRow)
+        cleanupModelField.leadingAnchor.constraint(equalTo: cleanupModelRow.leadingAnchor).isActive = true
+        cleanupModelField.trailingAnchor.constraint(equalTo: container.trailingAnchor).isActive = true
+
+        cleanupSystemPromptRow = makeLabeledField("System Prompt", control: cleanupSystemPromptScrollView)
+        container.addArrangedSubview(cleanupSystemPromptRow)
+        cleanupSystemPromptScrollView.leadingAnchor.constraint(equalTo: cleanupSystemPromptRow.leadingAnchor).isActive = true
+        cleanupSystemPromptScrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor).isActive = true
 
         let dictField = makeLabeledField("Add Dictionary Word", control: dictionaryInputRow)
         container.addArrangedSubview(dictField)
@@ -237,6 +295,11 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         whisperkitModelField.stringValue = settings.whisperkitModel ?? ""
         whisperkitLanguageField.stringValue = settings.whisperkitLanguage ?? ""
         cleanupEnabledCheckbox.state = (settings.cleanupEnabled ?? false) ? .on : .off
+        debugModeCheckbox.state = (settings.debugMode ?? false) ? .on : .off
+        let cleanupProvider = (settings.cleanupProvider ?? "apple").lowercased()
+        cleanupProviderPopup.selectItem(withTitle: cleanupProvider == "lmstudio" ? "lmstudio" : "apple")
+        cleanupModelField.stringValue = settings.cleanupModel ?? "essentialai/rnj-1"
+        cleanupSystemPromptView.string = settings.cleanupSystemPrompt ?? Self.defaultCleanupSystemPrompt
         dictionaryTerms = splitDictionaryTerms(settings.cleanupUserDictionary ?? "")
         dictionaryTerms = deduplicatedDictionaryTerms(dictionaryTerms)
         dictionaryInputField.stringValue = ""
@@ -254,9 +317,18 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         refreshControlState()
     }
 
+    @objc private func debugModeToggled() {
+        refreshControlState()
+    }
+
+    @objc private func cleanupProviderChanged() {
+        refreshControlState()
+    }
+
     private func refreshControlState() {
         let whisperkitSelected = providerPopup.titleOfSelectedItem == "whisperkit"
         let cleanupEnabled = cleanupEnabledCheckbox.state == .on
+        let lmstudioSelected = cleanupProviderPopup.titleOfSelectedItem == "lmstudio"
 
         if whisperkitSelected {
             modelInfoLabel.isHidden = true
@@ -267,6 +339,12 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
 
         whisperkitModelRow.isHidden = !whisperkitSelected
         whisperkitLanguageRow.isHidden = !whisperkitSelected
+        cleanupProviderRow.isHidden = !cleanupEnabled
+        cleanupModelRow.isHidden = !(cleanupEnabled && lmstudioSelected)
+        cleanupSystemPromptRow.isHidden = !cleanupEnabled
+        cleanupProviderPopup.isEnabled = cleanupEnabled
+        cleanupModelField.isEnabled = cleanupEnabled && lmstudioSelected
+        cleanupSystemPromptView.isEditable = cleanupEnabled
         dictionaryInputField.isEnabled = cleanupEnabled
         dictionaryAddButton.isEnabled = cleanupEnabled
         dictionaryDisclosureButton.isEnabled = cleanupEnabled
@@ -352,25 +430,40 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         updated.asrProvider = providerPopup.titleOfSelectedItem
         updated.whisperkitModel = valueOrNil(whisperkitModelField.stringValue)
         updated.whisperkitLanguage = valueOrNil(whisperkitLanguageField.stringValue)
+        updated.debugMode = debugModeCheckbox.state == .on
         updated.cleanupEnabled = cleanupEnabledCheckbox.state == .on
+        updated.cleanupProvider = cleanupProviderPopup.titleOfSelectedItem
+        updated.cleanupModel = valueOrNil(cleanupModelField.stringValue)
+        updated.cleanupSystemPrompt = valueOrNil(cleanupSystemPromptView.string)
         updated.cleanupUserDictionary = valueOrNil(joinedDictionaryTerms())
 
         do {
             try store.save(updated)
             settings = updated
             statusLabel.textColor = .systemGreen
-            statusLabel.stringValue = "Saved. Restarting backend..."
-            DispatchQueue.global().async { [weak self] in
-                guard let self else { return }
-                do {
-                    try self.backendProcess.restart()
+            if updated.debugMode == true {
+                statusLabel.stringValue = "Saved. Stopping backend (debug mode — run manually)..."
+                DispatchQueue.global().async { [weak self] in
+                    guard let self else { return }
+                    self.backendProcess.stop()
                     DispatchQueue.main.async {
-                        self.statusLabel.stringValue = "Saved. Backend restarted."
+                        self.statusLabel.stringValue = "Saved. Backend stopped — run src/main.py manually to see logs."
                     }
-                } catch {
-                    DispatchQueue.main.async {
-                        self.statusLabel.textColor = .systemOrange
-                        self.statusLabel.stringValue = "Saved, but backend restart failed: \(error.localizedDescription)"
+                }
+            } else {
+                statusLabel.stringValue = "Saved. Restarting backend..."
+                DispatchQueue.global().async { [weak self] in
+                    guard let self else { return }
+                    do {
+                        try self.backendProcess.restart()
+                        DispatchQueue.main.async {
+                            self.statusLabel.stringValue = "Saved. Backend restarted."
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            self.statusLabel.textColor = .systemOrange
+                            self.statusLabel.stringValue = "Saved, but backend restart failed: \(error.localizedDescription)"
+                        }
                     }
                 }
             }
@@ -462,4 +555,3 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
 private final class FlippedClipView: NSClipView {
     override var isFlipped: Bool { true }
 }
-

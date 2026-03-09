@@ -4,7 +4,11 @@ struct AppSettings: Codable {
     var asrProvider: String?
     var whisperkitModel: String?
     var whisperkitLanguage: String?
+    var debugMode: Bool?
     var cleanupEnabled: Bool?
+    var cleanupProvider: String?
+    var cleanupModel: String?
+    var cleanupSystemPrompt: String?
     var cleanupUserDictionary: String?
 }
 
