@@ -132,17 +132,38 @@ Most users only need:
 - `DICTATION_SETTINGS_FILE`
 
 Advanced overrides (optional):
+- `DICTATION_DEBUG_MODE`
 - `DICTATION_PROJECT_ROOT`
 - `DICTATION_WHISPERKIT_ENDPOINT`
 - `DICTATION_ASR_TOKEN_FILE`
+- `DICTATION_CLEANUP_PROVIDER` (`apple` or `lmstudio`)
+- `DICTATION_LMSTUDIO_ENDPOINT` (default: `http://localhost:1234/v1/responses`)
+- `DICTATION_LMSTUDIO_MODEL` (default: `essentialai/rnj-1`)
+- `DICTATION_LMSTUDIO_TEMPERATURE` (default: `0.1`)
+- `DICTATION_LMSTUDIO_MAX_OUTPUT_TOKENS` (default: `96`)
 
-All provider/cleanup/dictionary behavior should be managed in the app `Settings...` window.
+All provider/cleanup/dictionary behavior should be managed in the app `Settings...` window, including:
+- Cleanup provider (`apple` or `lmstudio`)
+- LM Studio cleanup model
+- Cleanup system prompt
+- Debug Mode (stops the backend so you can run it manually and see logs in your terminal)
 
 Settings precedence:
-1. Process environment variables (exported in shell / launch environment)
-2. Settings JSON written by the app (`Settings...` window)
+1. Settings JSON written by the app (`Settings...` window)
+2. Process environment variables
 3. `.env` / `.env.local`
 4. Built-in defaults
+
+### Debug Mode
+
+Enable **Debug Mode** in `Settings...` to stop the managed backend process.
+Then run the backend manually in a terminal to see all logs:
+
+```bash
+uv run src/main.py
+```
+
+Disable Debug Mode and save to let the app manage the backend again.
 
 ### Optional: Apple Foundation Model cleanup pass
 
@@ -158,6 +179,14 @@ DICTATION_CLEANUP_ENABLED=true
 ```
 
 When enabled, raw transcript text is rewritten to remove filler words, pauses, stutters, and false starts while preserving intended meaning.
+
+### Optional: LM Studio cleanup provider
+
+If you choose `lmstudio` as cleanup provider in `Settings...`, the backend sends cleanup requests to:
+- `http://localhost:1234/v1/responses` (default)
+- model default: `essentialai/rnj-1`
+
+You can override endpoint/model with env vars if needed.
 
 ### ASR provider options
 
