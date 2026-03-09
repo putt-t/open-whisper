@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import tempfile
 from functools import cached_property, lru_cache
@@ -16,6 +15,20 @@ DEFAULT_ASR_REPO = "mlx-community/Qwen3-ASR-1.7B-6bit"
 DEFAULT_ASR_TOKEN_FILE = Path.home() / ".dictation" / "asr-token"
 DEFAULT_APP_SETTINGS_FILE = (
     Path.home() / "Library" / "Application Support" / "OpenWhisper" / "settings.json"
+)
+DEFAULT_CLEANUP_INSTRUCTIONS = (
+    "You clean raw speech-to-text transcripts into final user-ready text. "
+    "Preserve meaning, intent, entities, and factual content. "
+    "Remove filler words, false starts, repeated fragments, and disfluencies. "
+    "If the speaker revises or retracts earlier content, keep only the latest surviving intent. "
+    "When there are corrections, compress to a concise final statement of the surviving intent. "
+    "Never include discarded alternatives together with the final chosen option. "
+    "If there is no disfluency or correction, keep text unchanged. "
+    "Keep the original language and tone. "
+    "Return plain text only, with no labels like 'Cleaned:'. "
+    "Do not wrap output in quotation marks, backticks, or code fences. "
+    "Do not add new information. "
+    "Return only the cleaned final text."
 )
 
 
@@ -34,6 +47,10 @@ class Settings(BaseSettings):
     dictation_asr_provider: Literal["qwen", "whisperkit"] = Field(
         default="qwen",
         alias="DICTATION_ASR_PROVIDER",
+    )
+    dictation_debug_mode: bool = Field(
+        default=False,
+        alias="DICTATION_DEBUG_MODE",
     )
     dictation_tmp_dir: Path = Field(
         default=Path(tempfile.gettempdir()) / "dictation-asr",
@@ -68,20 +85,36 @@ class Settings(BaseSettings):
         default=False,
         alias="DICTATION_CLEANUP_ENABLED",
     )
+    dictation_cleanup_provider: Literal["apple", "lmstudio"] = Field(
+        default="apple",
+        alias="DICTATION_CLEANUP_PROVIDER",
+    )
+    dictation_apple_temperature: float = Field(
+        default=0.1,
+        alias="DICTATION_APPLE_TEMPERATURE",
+    )
+    dictation_lmstudio_endpoint: str = Field(
+        default="http://localhost:1234/v1/responses",
+        alias="DICTATION_LMSTUDIO_ENDPOINT",
+    )
+    dictation_lmstudio_model: str = Field(
+        default="essentialai/rnj-1",
+        alias="DICTATION_LMSTUDIO_MODEL",
+    )
+    dictation_lmstudio_temperature: float = Field(
+        default=0.1,
+        alias="DICTATION_LMSTUDIO_TEMPERATURE",
+    )
+    dictation_lmstudio_max_output_tokens: int = Field(
+        default=96,
+        alias="DICTATION_LMSTUDIO_MAX_OUTPUT_TOKENS",
+    )
+    dictation_lmstudio_timeout_seconds: float = Field(
+        default=30.0,
+        alias="DICTATION_LMSTUDIO_TIMEOUT_SECONDS",
+    )
     dictation_cleanup_instructions: str = Field(
-        default=(
-            "You clean raw speech-to-text transcripts into final user-ready text. "
-            "Preserve meaning, intent, entities, and factual content. "
-            "Remove filler words, false starts, repeated fragments, and disfluencies. "
-            "If the speaker revises or retracts earlier content, keep only the latest surviving intent. "
-            "When there are corrections, compress to a concise final statement of the surviving intent. "
-            "Never include discarded alternatives together with the final chosen option. "
-            "If there is no disfluency or correction, keep text unchanged. "
-            "Keep the original language and tone. "
-            "Return plain text only, with no labels like 'Cleaned:'. "
-            "Do not add new information. "
-            "Return only the cleaned final text."
-        ),
+        default=DEFAULT_CLEANUP_INSTRUCTIONS,
         alias="DICTATION_CLEANUP_INSTRUCTIONS",
     )
     dictation_cleanup_user_dictionary: str = Field(
@@ -135,21 +168,8 @@ class Settings(BaseSettings):
             return {}
         return parsed if isinstance(parsed, dict) else {}
 
-    def _env_overrides(self, field_name: str) -> bool:
-        field = type(self).model_fields.get(field_name)
-        if field is None:
-            return False
-
-        alias = field.alias
-        if alias and alias in os.environ:
-            return True
-        return field_name in os.environ
-
     @property
     def effective_asr_provider(self) -> Literal["qwen", "whisperkit"]:
-        if self._env_overrides("dictation_asr_provider"):
-            return self.dictation_asr_provider
-
         value = self.app_settings.get("asrProvider")
         if value in {"qwen", "whisperkit"}:
             return value
@@ -157,9 +177,6 @@ class Settings(BaseSettings):
 
     @property
     def effective_whisperkit_model(self) -> str:
-        if self._env_overrides("dictation_whisperkit_model"):
-            return self.dictation_whisperkit_model
-
         value = self.app_settings.get("whisperkitModel")
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -167,9 +184,6 @@ class Settings(BaseSettings):
 
     @property
     def effective_whisperkit_language(self) -> str | None:
-        if self._env_overrides("dictation_whisperkit_language"):
-            return self.dictation_whisperkit_language
-
         value = self.app_settings.get("whisperkitLanguage")
         if isinstance(value, str):
             cleaned = value.strip()
@@ -178,19 +192,41 @@ class Settings(BaseSettings):
 
     @property
     def effective_cleanup_enabled(self) -> bool:
-        if self._env_overrides("dictation_cleanup_enabled"):
-            return self.dictation_cleanup_enabled
-
         value = self.app_settings.get("cleanupEnabled")
         if isinstance(value, bool):
             return value
         return self.dictation_cleanup_enabled
 
     @property
-    def effective_cleanup_user_dictionary(self) -> str:
-        if self._env_overrides("dictation_cleanup_user_dictionary"):
-            return self.dictation_cleanup_user_dictionary
+    def effective_debug_mode(self) -> bool:
+        value = self.app_settings.get("debugMode")
+        if isinstance(value, bool):
+            return value
+        return self.dictation_debug_mode
 
+    @property
+    def effective_cleanup_provider(self) -> Literal["apple", "lmstudio"]:
+        value = self.app_settings.get("cleanupProvider")
+        if value in {"apple", "lmstudio"}:
+            return value
+        return self.dictation_cleanup_provider
+
+    @property
+    def effective_cleanup_model(self) -> str:
+        value = self.app_settings.get("cleanupModel")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return self.dictation_lmstudio_model
+
+    @property
+    def effective_cleanup_instructions(self) -> str:
+        value = self.app_settings.get("cleanupSystemPrompt")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return self.dictation_cleanup_instructions
+
+    @property
+    def effective_cleanup_user_dictionary(self) -> str:
         value = self.app_settings.get("cleanupUserDictionary")
         if isinstance(value, str):
             return value
