@@ -9,13 +9,17 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
+from typing import Protocol
 
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
 from src.asr.providers import Transcriber
-from src.postprocess.apple_transcript_cleaner import AppleTranscriptCleaner
 
 logger = logging.getLogger(__name__)
+
+
+class TranscriptCleaner(Protocol):
+    async def clean(self, transcript: str) -> str: ...
 
 
 class ASRService:
@@ -26,12 +30,14 @@ class ASRService:
         transcriber: Transcriber,
         auth_token_file: Path,
         log_transcripts: bool = True,
-        transcript_cleaner: AppleTranscriptCleaner | None = None,
+        transcript_cleaner: TranscriptCleaner | None = None,
+        debug_mode: bool = False,
     ) -> None:
         self.transcriber = transcriber
         self.auth_token_file = auth_token_file
         self.log_transcripts = log_transcripts
         self.transcript_cleaner = transcript_cleaner
+        self.debug_mode = debug_mode
         self._auth_token: str | None = None
         self._transcription_lock = asyncio.Lock()
 
@@ -52,6 +58,8 @@ class ASRService:
             self.transcriber.provider_name,
             self.transcriber.model_id,
         )
+        if self.debug_mode:
+            logger.info("Debug mode enabled")
 
     async def shutdown(self) -> None:
         await self.transcriber.shutdown()
@@ -99,6 +107,8 @@ class ASRService:
             self._cleanup_temp_file(tmp_audio_path)
 
     def _preview_for_log(self, text: str) -> str:
+        if self.debug_mode:
+            return text
         normalized = " ".join(text.split())
         if len(normalized) <= self._LOG_TEXT_PREVIEW_MAX:
             return normalized
